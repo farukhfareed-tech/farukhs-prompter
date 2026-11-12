@@ -1,0 +1,416 @@
+<title>Farukh's Prompter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one phone-sized stage (iPhone 13 = 390x844). Full-bleed on a real phone, framed on desktop. Single cinematic dark look by choice. */
+:root {
+  --bg: #050505;
+  --surface: #121110;
+  --surface-2: #1b1917;
+  --line: #2a2622;
+  --fg: #f3eee6;
+  --muted: #8f877c;
+  --accent: #e9b46a;
+  --rec: #ff4d3d;
+  --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif;
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: #000; color: var(--fg); font-family: var(--ui); letter-spacing: .01em; -webkit-font-smoothing: antialiased;
+  padding-block: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.note { max-width: 390px; text-align: center; font-size: 12px; line-height: 1.5; color: var(--muted); margin: 0; }
+.note b { color: var(--accent); font-weight: 600; }
+
+.phone {
+  position: relative; width: 390px; max-width: 100%; height: min(844px, calc(100% - 70px)); min-height: 560px;
+  background: var(--bg); border-radius: 44px; border: 1px solid var(--line); overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 8px #0d0c0b;
+  display: flex; flex-direction: column;
+}
+.screen { position: absolute; inset: 0; display: none; flex-direction: column; padding-bottom: 76px; }
+.screen.on { display: flex; }
+.screen.full { padding-bottom: 0; }
+.status { height: 46px; flex: none; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 28px 4px; font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+.status i { font-style: normal; color: var(--muted); font-weight: 500; }
+
+/* Tab bar */
+.tabs { position: absolute; left: 0; right: 0; bottom: 0; height: 76px; display: flex; justify-content: space-around; align-items: flex-start; padding-top: 10px;
+  background: linear-gradient(to top, #000 60%, rgba(0,0,0,0)); z-index: 5; }
+.tabs.hide { display: none; }
+.tab { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); width: 84px; padding: 4px 0; }
+.tab svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tab.on { color: var(--accent); }
+
+/* Library */
+.head { padding: 14px 24px 6px; display: flex; align-items: flex-end; justify-content: space-between; }
+h1 { font-family: var(--display); font-weight: 600; font-size: 34px; line-height: 1.1; margin: 0; letter-spacing: 0; }
+h1 em { color: var(--accent); }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+.sign { margin: 28px 0 10px; text-align: center; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.sign b { display: block; color: var(--fg); font-size: 15px; font-weight: 600; letter-spacing: .04em; }
+.round { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: #1a1208; display: grid; place-items: center; font-size: 24px; font-weight: 500; }
+.search { margin: 14px 24px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; color: var(--muted); font-size: 14px; }
+.chips { display: flex; gap: 8px; padding: 6px 24px 12px; overflow-x: auto; scrollbar-width: none; }
+.chip { flex: none; padding: 6px 13px; border-radius: 99px; border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.chip.on { background: var(--fg); color: #111; border-color: var(--fg); }
+.list { flex: 1; overflow-y: auto; padding: 0 24px 16px; scrollbar-width: none; }
+.card { width: 100%; text-align: left; display: block; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.card h3 { margin: 0 0 4px; font-family: var(--display); font-weight: 600; font-size: 19px; line-height: 1.25; letter-spacing: .005em; }
+.card p { margin: 0 0 10px; font-size: 13px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.meta { display: flex; gap: 14px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta b { color: var(--accent); font-weight: 600; }
+
+/* Editor */
+.bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; flex: none; }
+.link { color: var(--accent); font-size: 15px; font-weight: 500; padding: 8px 4px; }
+.link.sub { color: var(--muted); }
+.ed-title { margin: 6px 24px 0; font-family: var(--display); font-weight: 600; letter-spacing: 0; font-size: 26px; background: none; border: 0; color: var(--fg); width: calc(100% - 48px); }
+.ed-text { flex: 1; margin: 6px 24px 0; width: calc(100% - 48px); background: none; border: 0; resize: none; color: #d9d2c7; font: 400 16px/1.6 var(--ui); }
+.ed-tools { display: flex; gap: 8px; padding: 10px 24px 16px; border-top: 1px solid var(--line); flex: none; overflow-x: auto; scrollbar-width: none; align-items: center; }
+.tool { flex: none; padding: 7px 12px; border-radius: 10px; background: var(--surface-2); font-size: 12.5px; color: var(--fg); }
+.tool.cue { color: var(--accent); }
+.stats { margin-left: auto; flex: none; font-size: 11.5px; color: var(--muted); padding-left: 8px; font-variant-numeric: tabular-nums; }
+.start { margin: 0 24px 22px; padding: 16px; border-radius: 16px; background: var(--accent); color: #1a1208; font-weight: 700; font-size: 16px; text-align: center; flex: none; }
+
+/* Prompter */
+.stage { position: relative; flex: 1; overflow: hidden; }
+.reader { position: absolute; inset: 0; overflow-y: scroll; scrollbar-width: none; }
+.reader::-webkit-scrollbar { display: none; }
+.reader-in { padding: 38% 28px 120% 28px; text-align: center; font-weight: 600; line-height: 1.5; letter-spacing: .01em; color: #f6f1e8; }
+.reader-in p { margin: 0 0 .9em; }
+.reader-in .mir { display: block; }
+.cuechip { display: inline-block; font-size: .42em; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); border-radius: 99px; padding: .2em .8em; vertical-align: middle; opacity: .9; }
+.fade { position: absolute; left: 0; right: 0; pointer-events: none; z-index: 2; }
+.fade.t { top: 0; height: 28%; background: linear-gradient(#000 8%, rgba(0,0,0,0)); }
+.fade.b { bottom: 0; height: 30%; background: linear-gradient(rgba(0,0,0,0), #000 92%); }
+.guide { position: absolute; left: 14px; right: 14px; top: 36%; height: 0; border-top: 1px solid rgba(233,180,106,.55); z-index: 3; pointer-events: none; }
+.guide::before, .guide::after { content: ""; position: absolute; top: -6px; border: 6px solid transparent; }
+.guide::before { left: -14px; border-left-color: var(--accent); }
+.guide::after { right: -14px; border-right-color: var(--accent); transform: rotate(180deg); }
+.hud { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 50px 20px 0; z-index: 4; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; transition: opacity .4s; }
+.hud .x { font-size: 15px; color: var(--fg); padding: 6px 10px; border-radius: 99px; background: rgba(255,255,255,.08); }
+.hud .pace { display: flex; gap: 12px; }
+.hud .pace b { color: var(--fg); font-weight: 600; }
+.stage.run .hud { opacity: .35; }
+.count { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font-family: var(--display); font-weight: 200; font-size: 160px; color: var(--accent); z-index: 6; background: rgba(0,0,0,.55); }
+.count.on { display: flex; }
+.dock { flex: none; background: linear-gradient(to top, #000 70%, rgba(0,0,0,0)); padding: 8px 22px 28px; z-index: 5; }
+.seek { height: 3px; background: var(--line); border-radius: 3px; margin-bottom: 14px; overflow: hidden; }
+.seek i { display: block; height: 100%; width: 0; background: var(--accent); }
+.ctl { display: flex; align-items: center; gap: 14px; }
+.play { width: 62px; height: 62px; border-radius: 50%; background: var(--accent); color: #1a1208; display: grid; place-items: center; flex: none; }
+.play svg { width: 26px; height: 26px; fill: currentColor; }
+.slide { flex: 1; min-width: 0; }
+.slide label { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.slide label b { color: var(--fg); font-weight: 600; }
+input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; height: 22px; background: transparent; }
+.mini { display: flex; gap: 8px; margin-top: 12px; }
+.pill { flex: 1; text-align: center; padding: 9px 0; border-radius: 12px; background: var(--surface-2); font-size: 12.5px; color: var(--muted); }
+.pill.on { color: #1a1208; background: var(--fg); }
+
+/* Record */
+.cam { position: absolute; inset: 0; background:
+  radial-gradient(120% 70% at 50% 85%, #3a2c22 0%, #15110e 55%, #070605 100%); }
+.silhouette { position: absolute; left: 50%; bottom: 0; width: 76%; transform: translateX(-50%); opacity: .5; }
+.overlay { position: absolute; left: 0; right: 0; top: 86px; height: 190px; background: linear-gradient(rgba(0,0,0,.72), rgba(0,0,0,.45) 70%, rgba(0,0,0,0)); overflow: hidden; z-index: 2; }
+.overlay .reader { position: absolute; inset: 0; }
+.overlay .reader-in { padding: 54px 24px 80px; font-size: 22px; }
+.overlay .guide { top: 54px; }
+.rec-top { position: absolute; top: 50px; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; z-index: 4; font-size: 12px; }
+.badge { padding: 5px 10px; border-radius: 8px; background: rgba(0,0,0,.55); font-weight: 600; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.live .dot { background: var(--rec); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .live .dot { animation: none; } }
+.rec-bot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 28px 34px; display: flex; align-items: center; justify-content: space-between; z-index: 4; }
+.rbtn { width: 72px; height: 72px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; }
+.rbtn i { width: 56px; height: 56px; border-radius: 50%; background: var(--rec); transition: all .2s; }
+.live .rbtn i { width: 28px; height: 28px; border-radius: 7px; }
+.side { width: 54px; text-align: center; font-size: 11px; color: #ddd; }
+.side span { display: grid; place-items: center; width: 44px; height: 44px; margin: 0 auto 4px; border-radius: 50%; background: rgba(255,255,255,.14); font-size: 12px; font-weight: 600; }
+.opacity-row { position: absolute; left: 24px; right: 24px; bottom: 124px; z-index: 4; display: flex; align-items: center; gap: 12px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #cfc6b8; }
+
+/* Settings */
+.sets { flex: 1; overflow-y: auto; padding: 0 24px 16px; scrollbar-width: none; }
+.grp { margin: 18px 0 6px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.row small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.sw { width: 46px; height: 28px; border-radius: 99px; background: var(--surface-2); position: relative; flex: none; transition: background .2s; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.sw.on { background: var(--accent); }
+.sw.on::after { transform: translateX(18px); }
+.seg { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; flex: none; }
+.seg button { padding: 6px 11px; border-radius: 8px; font-size: 12.5px; color: var(--muted); }
+.seg button.on { background: var(--fg); color: #111; font-weight: 600; }
+.swatches { display: flex; gap: 10px; }
+.swatches button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; }
+.swatches button.on { border-color: #fff; }
+.sample { margin-top: 14px; padding: 20px 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); text-align: center; font-weight: 700; line-height: 1.35; }
+
+@media (max-width: 440px) {
+  body { padding: 0; gap: 0; }
+  .note { display: none; }
+  .phone { width: 100%; height: 100%; border-radius: 0; border: 0; box-shadow: none; }
+}
+</style>
+
+<p class="note">Interactive preview of the iPhone 13 app. Tap through every screen. <b>Look and flow only</b>: the real app will have working voice-follow and 4K camera.</p>
+
+<div class="phone" id="phone">
+
+  <!-- LIBRARY -->
+  <section class="screen on" id="s-lib">
+    <div class="status"><span>9:41</span><i>5G &nbsp;▮▮▮</i></div>
+    <div class="head"><div><div class="eyebrow">Farukh's Prompter</div><h1>Scripts<em>.</em></h1></div><button class="round" id="newBtn" aria-label="New script">+</button></div>
+    <div class="search">Search scripts</div>
+    <div class="chips"><span class="chip on">All</span><span class="chip">Intros</span><span class="chip">Reviews</span><span class="chip">Speeches</span><span class="chip">Ideas</span></div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <!-- EDITOR -->
+  <section class="screen full" id="s-ed">
+    <div class="status"><span>9:41</span><i>5G &nbsp;▮▮▮</i></div>
+    <div class="bar"><button class="link sub" data-go="lib">‹ Scripts</button><button class="link" id="saveBtn">Saved</button></div>
+    <input class="ed-title" id="edTitle" value="Morning vlog opener" aria-label="Script title">
+    <textarea class="ed-text" id="edText" aria-label="Script text"></textarea>
+    <div class="ed-tools">
+      <button class="tool cue" data-cue="[pause]">+ [pause]</button>
+      <button class="tool cue" data-cue="[smile]">+ [smile]</button>
+      <button class="tool cue" data-cue="[slow]">+ [slow]</button>
+      <span class="stats" id="stats"></span>
+    </div>
+    <button class="start" id="startBtn">Start prompter</button>
+  </section>
+
+  <!-- PROMPTER -->
+  <section class="screen full" id="s-pr">
+    <div class="stage" id="stage">
+      <div class="hud"><button class="x" id="prClose">✕ Close</button><span class="pace"><span>Time <b id="prTime">0:00</b></span><span>Pace <b id="prWpm">0</b> wpm</span></span></div>
+      <div class="guide"></div>
+      <div class="fade t"></div><div class="fade b"></div>
+      <div class="reader" id="prReader"><div class="reader-in" id="prText"></div></div>
+      <div class="count" id="count">3</div>
+    </div>
+    <div class="dock">
+      <div class="seek"><i id="seek"></i></div>
+      <div class="ctl">
+        <button class="play" id="playBtn" aria-label="Play or pause"><svg viewBox="0 0 24 24" id="playIco"><path d="M7 4.5v15l12-7.5z"/></svg></button>
+        <div class="slide"><label>Speed <b id="spdV">40</b></label><input type="range" id="spd" min="10" max="120" value="40"></div>
+        <div class="slide"><label>Size <b id="sizeV">34</b></label><input type="range" id="size" min="22" max="64" value="34"></div>
+      </div>
+      <div class="mini"><button class="pill" id="mirBtn">Mirror</button><button class="pill on" id="voiceBtn">Voice follow</button><button class="pill" id="recBtn">Record ●</button></div>
+    </div>
+  </section>
+
+  <!-- RECORD -->
+  <section class="screen full" id="s-rec">
+    <div class="cam"><svg class="silhouette" viewBox="0 0 300 260" aria-hidden="true"><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7b6755"/><stop offset="1" stop-color="#2a211a"/></linearGradient></defs><circle cx="150" cy="82" r="56" fill="url(#sg)"/><path d="M20 260c0-70 52-104 130-104s130 34 130 104z" fill="url(#sg)"/></svg></div>
+    <div class="rec-top"><button class="x hudx" id="recClose" style="padding:6px 10px;border-radius:99px;background:rgba(0,0,0,.5)">✕</button><span class="badge" id="recBadge"><span class="dot"></span><span id="recTime">0:00</span></span><span class="badge">4K · 30 · HDR</span></div>
+    <div class="overlay" id="ov"><div class="guide"></div><div class="reader" id="ovReader"><div class="reader-in" id="ovText"></div></div></div>
+    <div class="opacity-row"><span>Text band</span><input type="range" id="ovOp" min="20" max="100" value="72" aria-label="Text band opacity"></div>
+    <div class="rec-bot"><div class="side"><span>1×</span>Lens</div><button class="rbtn" id="rbtn" aria-label="Record"><i></i></button><div class="side"><span>⟲</span>Flip</div></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="screen" id="s-set">
+    <div class="status"><span>9:41</span><i>5G &nbsp;▮▮▮</i></div>
+    <div class="head"><h1>Settings<em>.</em></h1></div>
+    <div class="sets">
+      <div class="sample" id="sample" style="font-size:26px">The words you read<br>will look like this.</div>
+      <div class="grp">Reading</div>
+      <div class="row"><span>Text size</span><div class="seg" id="segSize"><button data-v="26">S</button><button data-v="34" class="on">M</button><button data-v="44">L</button><button data-v="56">XL</button></div></div>
+      <div class="row"><span>Accent colour</span><div class="swatches" id="sw"><button data-c="#e9b46a" class="on" style="background:#e9b46a" aria-label="Amber"></button><button data-c="#7fd1c1" style="background:#7fd1c1" aria-label="Mint"></button><button data-c="#c6a6ff" style="background:#c6a6ff" aria-label="Lilac"></button><button data-c="#ff8f7a" style="background:#ff8f7a" aria-label="Coral"></button></div></div>
+      <div class="row"><span>Reading guide<small>A thin line where your eyes rest</small></span><button class="sw on" data-tog="guide" aria-label="Reading guide"></button></div>
+      <div class="row"><span>Mirror text<small>For glass teleprompter rigs</small></span><button class="sw" data-tog="mirror" aria-label="Mirror"></button></div>
+      <div class="grp">Smart help</div>
+      <div class="row"><span>Voice follow<small>Scroll follows what you say. On this phone only.</small></span><button class="sw on" data-tog="voice" aria-label="Voice follow"></button></div>
+      <div class="row"><span>Pace coach<small>Live words per minute</small></span><button class="sw on" data-tog="pace" aria-label="Pace coach"></button></div>
+      <div class="row"><span>Countdown before start</span><div class="seg" id="segCd"><button data-v="0">Off</button><button data-v="3" class="on">3s</button><button data-v="5">5s</button></div></div>
+      <div class="grp">Camera</div>
+      <div class="row"><span>Quality</span><div class="seg" id="segQ"><button>1080p</button><button class="on">4K 30</button><button>4K 60</button></div></div>
+      <div class="row"><span>Privacy<small>No account. No ads. Nothing leaves your phone.</small></span><span style="color:var(--accent);font-size:13px">On</span></div>
+      <div class="sign"><b>Farukh's Prompter</b>Designed and owned by Farukh<br>Version 1.0</div>
+    </div>
+  </section>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab on" data-go="lib"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M9 11h6M9 15h6"/></svg>Scripts</button>
+    <button class="tab" data-go="rec"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="3"/><path d="M16 11l5-3v8l-5-3z"/></svg>Record</button>
+    <button class="tab" data-go="set"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Settings</button>
+  </nav>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var scripts = [
+    { t: "Morning vlog opener", tag: "Intro", text: "Good morning, everyone. [smile]\n\nToday I'm trying something I've been putting off for weeks, and I think you'll be surprised by how it turns out.\n\nBefore we start, grab a coffee. [pause] This one takes a few minutes.\n\nHere is the plan. First, I'll show you what I started with. Then we'll go step by step, and I'll tell you everything that went wrong along the way. [slow]\n\nBy the end, you'll know exactly what to do, and what to skip.\n\nLet's get into it." },
+    { t: "Phone review, week two", tag: "Review", text: "I've used this phone for two weeks. [pause] Here is what I actually think.\n\nThe camera is the headline, and it earns it. Low light is clean, skin tones look natural, and video stays steady even when I'm walking.\n\nBattery gets me through a full day with room to spare. [smile]\n\nThe one thing I'd change is the speaker. It's fine, but it's not great." },
+    { t: "Toast for Sara and Omar", tag: "Speech", text: "Good evening, everyone. [smile]\n\nFor those who don't know me, I've known Sara since we were eleven. She has never once been on time. [pause] Tonight, she was early. That's how I knew this was real.\n\nOmar, welcome to the family. Please take care of her, and bring a watch." },
+    { t: "Channel trailer ideas", tag: "Ideas", text: "Open on a close-up. [pause] One sentence about who this channel is for.\n\nThree quick cuts. Then the promise: one useful idea, every week." }
+  ];
+  var cur = 0, tab = "lib";
+  var S = { size: 34, speed: 40, mirror: false, guide: true, voice: true, pace: true, cd: 3, running: false, pos: 0 };
+
+  function words(t) { var m = t.replace(/\[[^\]]+\]/g, "").trim().match(/\S+/g); return m ? m.length : 0; }
+  function mins(t) { var m = words(t) / 150; return m < 1 ? Math.round(m * 60) + " sec" : m.toFixed(1) + " min"; }
+  function fmt(s) { s = Math.floor(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+  function esc(s) { return s.replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+
+  function renderList() {
+    $("list").innerHTML = scripts.map(function (s, i) {
+      return '<button class="card" data-i="' + i + '"><h3>' + esc(s.t) + '</h3><p>' + esc(s.text.replace(/\[[^\]]+\]/g, "").replace(/\n+/g, " ")) + '</p><div class="meta"><span><b>' + mins(s.text) + '</b></span><span>' + words(s.text) + ' words</span><span>' + s.tag + '</span></div></button>';
+    }).join("");
+  }
+  function html(t) {
+    return t.split(/\n+/).map(function (p) {
+      return "<p>" + esc(p).replace(/\[([^\]]+)\]/g, '<span class="cuechip">$1</span>') + "</p>";
+    }).join("");
+  }
+  function show(id) {
+    stop();
+    ["lib", "ed", "pr", "rec", "set"].forEach(function (k) { $("s-" + k).classList.toggle("on", k === id); });
+    var main = id === "lib" || id === "rec" || id === "set";
+    $("tabs").classList.toggle("hide", !(id === "lib" || id === "set"));
+    if (id === "lib" || id === "set") tab = id;
+    document.querySelectorAll(".tab").forEach(function (t) { t.classList.toggle("on", t.dataset.go === tab); });
+    if (id === "pr") loadPrompter();
+    if (id === "rec") loadRecord();
+  }
+  function openEd(i) {
+    cur = i; $("edTitle").value = scripts[i].t; $("edText").value = scripts[i].text; stats(); show("ed");
+  }
+  function stats() { var t = $("edText").value; $("stats").textContent = words(t) + " words · " + mins(t); }
+
+  /* Prompter engine */
+  var raf = 0, last = 0, acc = 0, t0 = 0, elapsed = 0, readerEl = null, seekEl = null;
+  function applyType() {
+    var inn = $("prText"); inn.style.fontSize = S.size + "px";
+    inn.style.transform = S.mirror ? "scaleX(-1)" : "none";
+    document.querySelector("#s-pr .guide").style.display = S.guide ? "" : "none";
+    $("sample").style.fontSize = Math.round(S.size * .78) + "px";
+    $("sample").style.transform = S.mirror ? "scaleX(-1)" : "none";
+    $("mirBtn").classList.toggle("on", S.mirror);
+    $("voiceBtn").classList.toggle("on", S.voice);
+  }
+  function loadPrompter() {
+    $("prText").innerHTML = html(scripts[cur].text);
+    readerEl = $("prReader"); seekEl = $("seek");
+    readerEl.scrollTop = 0; acc = 0; elapsed = 0; $("prTime").textContent = "0:00"; $("prWpm").textContent = "0";
+    $("seek").style.width = "0"; setPlay(false); applyType();
+    $("spd").value = S.speed; $("spdV").textContent = S.speed; $("size").value = S.size; $("sizeV").textContent = S.size;
+    document.querySelector("#s-pr .hud .pace").style.display = S.pace ? "" : "none";
+  }
+  function setPlay(on) {
+    S.running = on;
+    $("stage").classList.toggle("run", on);
+    $("playIco").innerHTML = on ? '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>' : '<path d="M7 4.5v15l12-7.5z"/>';
+  }
+  function tick(ts, el, onProg) {
+    if (!S.running) return;
+    var dt = (ts - last) / 1000; last = ts; if (dt > .1) dt = .016;
+    elapsed += dt;
+    acc += S.speed * dt * (S.voice ? (1 + .08 * Math.sin(elapsed * .9)) : 1);
+    el.scrollTop = acc;
+    var max = el.scrollHeight - el.clientHeight;
+    onProg(max > 0 ? Math.min(1, acc / max) : 0);
+    if (acc >= max) { setPlay(false); return; }
+    raf = requestAnimationFrame(function (t) { tick(t, el, onProg); });
+  }
+  function play() {
+    if (S.running) { setPlay(false); cancelAnimationFrame(raf); return; }
+    var go = function () {
+      setPlay(true); last = performance.now();
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(function (t) {
+        tick(t, readerEl, function (p) {
+          $("seek").style.width = (p * 100) + "%";
+          $("prTime").textContent = fmt(elapsed);
+          var w = words(scripts[cur].text) * p;
+          $("prWpm").textContent = elapsed > 3 ? Math.round(w / (elapsed / 60)) : 0;
+        });
+      });
+    };
+    if (S.cd > 0 && acc === 0) countdown(S.cd, go); else go();
+  }
+  var cdT = 0;
+  function countdown(n, done) {
+    var c = $("count"); c.classList.add("on"); c.textContent = n;
+    clearInterval(cdT);
+    cdT = setInterval(function () {
+      n--; if (n <= 0) { clearInterval(cdT); c.classList.remove("on"); done(); } else c.textContent = n;
+    }, 1000);
+  }
+  function stop() {
+    cancelAnimationFrame(raf); clearInterval(cdT); S.running = false;
+    var c = $("count"); if (c) c.classList.remove("on");
+    var r = $("s-rec"); if (r) r.classList.remove("live");
+  }
+
+  /* Record */
+  function loadRecord() {
+    $("ovText").innerHTML = html(scripts[cur].text); $("ovText").style.transform = S.mirror ? "scaleX(-1)" : "none";
+    $("ovReader").scrollTop = 0; acc = 0; elapsed = 0; $("recTime").textContent = "0:00";
+    $("ov").style.opacity = $("ovOp").value / 100;
+    document.querySelector("#ov .guide").style.display = S.guide ? "" : "none";
+  }
+  function toggleRec() {
+    var r = $("s-rec");
+    if (r.classList.contains("live")) { stop(); return; }
+    r.classList.add("live"); S.running = true; last = performance.now(); acc = 0; elapsed = 0;
+    raf = requestAnimationFrame(function (t) { tick(t, $("ovReader"), function () { $("recTime").textContent = fmt(elapsed); }); });
+  }
+
+  /* Wiring */
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest("button, .tab"); if (!el) return;
+    if (el.dataset.go) { show(el.dataset.go); return; }
+    if (el.classList.contains("card")) { openEd(+el.dataset.i); return; }
+    if (el.dataset.cue) { var ta = $("edText"), p = ta.selectionStart || ta.value.length; ta.value = ta.value.slice(0, p) + " " + el.dataset.cue + " " + ta.value.slice(p); stats(); return; }
+    if (el.dataset.tog) {
+      var k = el.dataset.tog; S[k] = !S[k]; el.classList.toggle("on", S[k]); applyType(); return;
+    }
+    var seg = el.closest(".seg");
+    if (seg) {
+      seg.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b === el); });
+      if (seg.id === "segSize") { S.size = +el.dataset.v; applyType(); }
+      if (seg.id === "segCd") S.cd = +el.dataset.v;
+      return;
+    }
+    if (el.closest("#sw")) {
+      document.querySelectorAll("#sw button").forEach(function (b) { b.classList.toggle("on", b === el); });
+      document.documentElement.style.setProperty("--accent", el.dataset.c); return;
+    }
+    if (el.closest(".chips")) return;
+  });
+  document.querySelectorAll(".chips .chip").forEach(function (c) { c.addEventListener("click", function () { document.querySelectorAll(".chips .chip").forEach(function (x) { x.classList.toggle("on", x === c); }); }); });
+  $("newBtn").onclick = function () { scripts.unshift({ t: "Untitled script", tag: "Draft", text: "" }); renderList(); openEd(0); $("edTitle").select(); };
+  $("edTitle").oninput = function () { scripts[cur].t = this.value; $("saveBtn").textContent = "Saved"; };
+  $("edText").oninput = function () { scripts[cur].text = this.value; stats(); $("saveBtn").textContent = "Saved"; };
+  $("startBtn").onclick = function () { renderList(); show("pr"); };
+  $("prClose").onclick = function () { renderList(); show("ed"); };
+  $("recClose").onclick = function () { show("lib"); };
+  $("playBtn").onclick = play;
+  $("recBtn").onclick = function () { show("rec"); };
+  $("rbtn").onclick = toggleRec;
+  $("ovOp").oninput = function () { $("ov").style.opacity = this.value / 100; };
+  $("spd").oninput = function () { S.speed = +this.value; $("spdV").textContent = S.speed; };
+  $("size").oninput = function () { S.size = +this.value; $("sizeV").textContent = S.size; applyType(); };
+  $("mirBtn").onclick = function () { S.mirror = !S.mirror; applyType(); };
+  $("voiceBtn").onclick = function () { S.voice = !S.voice; applyType(); };
+  document.querySelector("#s-rec").addEventListener("click", function () {}, false);
+
+  renderList();
+  applyType();
+})();
+</script>
